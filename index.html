@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>横向射击打土豆</title>
   <style>
+    
     * {
       margin: 0;
       padding: 0;
@@ -141,6 +142,17 @@
         font-size: 20px;
       }
     }
+    @media screen and (orientation:portrait) {
+      html {
+        transform: rotate(90deg);
+        transform-origin: top left;
+        width: 100vh;
+        height: 100vw;
+        position: absolute;
+        top: 100%;
+        left: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -159,6 +171,7 @@
       <div class="mobile-right">
         <div class="mobile-btn" id="btn-jump">跳</div>
         <div class="mobile-btn" id="btn-shoot">射</div>
+        <div class="mobile-btn" id="btn-restart">重开</div>
       </div>
     </div>
   </div>
@@ -239,6 +252,10 @@
       const btnRight = document.getElementById('btn-right');
       const btnJump = document.getElementById('btn-jump');
       const btnShoot = document.getElementById('btn-shoot');
+      const btnRestart = document.getElementById('btn-restart');
+      btnRestart.addEventListener('touchstart', () => {
+      restartGame(); // 直接调用你已有的重开函数
+  });
 
       // 左右移动：触摸按下=按键按下，松开=按键松开
       btnLeft.addEventListener('touchstart', () => keys['a'] = true);
