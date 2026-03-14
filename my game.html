@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>横向射击打土豆</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      overflow: hidden;
+      background: #87CEEB;
+      cursor: crosshair;
+      touch-action: manipulation;
+    }
+    #game-box {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      border-bottom: 40px solid #663300;
+    }
+    /* 玩家（替换你的图片路径） */
+    #player {
+      width: 60px;
+      height: 60px;
+      position: absolute;
+      bottom: 40px;
+      left: 80px;
+      background: url('./gemeimg/zhu.jpg') no-repeat center center;
+      background-size: cover;
+      z-index: 15;
+      /* 禁止闪烁：固定渲染模式 */
+      will-change: left, top;
+    }
+    /* 子弹（替换你的图片路径） */
+    .bullet {
+      width: 12px;
+      height: 8px;
+      position: absolute;
+      background: url('./gemeimg/zidan.jpg') no-repeat center center;
+      background-size: cover;
+      z-index: 10;
+    }
+    /* 怪物（替换你的2D模型路径） */
+    .monster {
+      width: 55px;
+      height: 55px;
+      position: absolute;
+      bottom: 40px;
+      right: -60px;
+      background: url('./gemeimg/怪物模板.jpg') no-repeat center center;
+      background-size: cover;
+      z-index: 10;
+    }
+    /* 障碍物（可替换成砖块图片） */
+    .obstacle {
+      width: 80px;
+      height: 80px;
+      position: absolute;
+      bottom: 40px;
+      background-color: pink;
+      border: 3px solid #654321;
+      z-index: 5;
+    }
+    #score-box {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: #fff;
+      font-size: 28px;
+      font-weight: bold;
+      text-shadow: 2px 2px 2px #000;
+      z-index: 99;
+    }
+    #tip {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      font-size: 14px;
+      text-shadow: 1px 1px 1px #000;
+      z-index: 99;
+      line-height: 1.5;
+    }
+    #game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #FFD700;
+      font-size: 56px;
+      font-weight: bold;
+      text-shadow: 3px 3px 3px #000;
+      display: none;
+      z-index: 99;
+    }
+
+    /* --- 手机端虚拟按键样式 --- */
+    .mobile-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .mobile-left, .mobile-right {
+      display: flex;
+      gap: 15px;
+      pointer-events: auto;
+    }
+    .mobile-btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      border: 3px solid #fff;
+      color: #fff;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .mobile-btn:active {
+      background: rgba(255,215,0,0.7);
+    }
+    /* 适配小屏手机，按键缩小 */
+    @media (max-width: 400px) {
+      .mobile-btn {
+        width: 60px;
+        height: 60px;
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-box">
+    <div id="tip">电脑：WASD移动 | 空格跳跃 | 鼠标射击 | R重开<br>手机：左右键移动 | 跳/射按钮操作</div>
+    <div id="score-box">得分：<span id="score">0</span></div>
+    <div id="game-over">游戏结束！按R重开</div>
+    <div id="player"></div>
+
+    <!-- 手机端虚拟按键 -->
+    <div class="mobile-controls">
+      <div class="mobile-left">
+        <div class="mobile-btn" id="btn-left">←</div>
+        <div class="mobile-btn" id="btn-right">→</div>
+      </div>
+      <div class="mobile-right">
+        <div class="mobile-btn" id="btn-jump">跳</div>
+        <div class="mobile-btn" id="btn-shoot">射</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 游戏核心配置（可直接修改难度/路径）
+    const gameConfig = {
+      playerSpeed: 8,        // 玩家移动速度
+      bulletSpeed: 12,       // 子弹速度
+      monsterSpeed: 3,       // 怪物速度
+      jumpHeight: 140,        // 跳跃高度（降低高度解决卡跳，丝滑不飞天）
+      jumpStep: 5,           // 跳跃步长（减小步长解决闪烁）
+      obstacleCount: 3,      // 障碍物数量
+      obstacleGap: 300,      // 障碍物间距
+      hitSoundSrc: './audio/1.mp3', // 打怪音效路径
+      baseMonsterTime: 1000, // 怪物基础刷新间隔
+      minMonsterTime: 500,   // 怪物最小刷新间隔（后期最快）
+      scoreSpeedStep: 20     // 每得1分，刷新间隔减少ms（数字越大越难）
+    };
+
+    // 全局变量（统一用top定位，彻底解决样式冲突）
+    const gameBox = document.getElementById('game-box');
+    const player = document.getElementById('player');
+    const scoreSpan = document.getElementById('score');
+    const gameOver = document.getElementById('game-over');
+    let score = 0;
+    let gameRunning = true;
+    let isJumping = false;  // 跳跃锁：彻底防连跳/卡跳
+    let monsterTimer = null;
+    let gameBoxHeight = gameBox.offsetHeight; // 游戏容器高度（固定）
+    const hitSound = new Audio(gameConfig.hitSoundSrc);
+    hitSound.volume = 0.7;
+
+    // 页面加载完成后初始化（统一转top定位，消除bottom冲突）
+    window.onload = function() {
+      gameBoxHeight = gameBox.offsetHeight;
+      // 核心：把player的bottom定位永久转为top定位，杜绝样式冲突
+      player.style.bottom = 'auto';
+      player.style.top = `${gameBoxHeight - 40 - player.offsetHeight}px`;
+      initGame();
+      initMobileControls();
+    };
+
+    // 初始化游戏：生成障碍物+怪物
+    function initGame() {
+      createObstacles();
+      monsterTimer = setInterval(createMonster, gameConfig.baseMonsterTime);
+    }
+
+    // 生成地面障碍物
+    function createObstacles() {
+      const startX = 300;
+      for (let i = 0; i < gameConfig.obstacleCount; i++) {
+        const obstacle = document.createElement('div');
+        obstacle.className = 'obstacle';
+        const left = startX + i * gameConfig.obstacleGap;
+        if (left < gameBox.offsetWidth - 200) {
+          obstacle.style.left = `${left}px`;
+          gameBox.appendChild(obstacle);
+        }
+      }
+    }
+
+    // --- 键盘控制（电脑端）---
+    const keys = {};
+    document.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === ' ' && !isJumping && gameRunning) jump();
+      if ((e.key === 'r' || e.key === 'R') && !gameRunning) restartGame();
+    });
+    document.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    // --- 手机端触屏控制（和键盘共用逻辑）---
+    function initMobileControls() {
+      const btnLeft = document.getElementById('btn-left');
+      const btnRight = document.getElementById('btn-right');
+      const btnJump = document.getElementById('btn-jump');
+      const btnShoot = document.getElementById('btn-shoot');
+
+      // 左右移动：触摸按下=按键按下，松开=按键松开
+      btnLeft.addEventListener('touchstart', () => keys['a'] = true);
+      btnLeft.addEventListener('touchend', () => keys['a'] = false);
+      btnRight.addEventListener('touchstart', () => keys['d'] = true);
+      btnRight.addEventListener('touchend', () => keys['d'] = false);
+      // 跳跃：触摸即跳（防连跳）
+      btnJump.addEventListener('touchstart', () => {
+        if (!isJumping && gameRunning) jump();
+      });
+      // 射击：触摸即发射
+      btnShoot.addEventListener('touchstart', () => {
+        if (gameRunning) createBullet();
+      });
+
+      // 禁止手机默认滚动/缩放，避免误触
+      document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    }
+
+    // 持续移动逻辑（电脑+手机共用，每帧检测）
+    setInterval(() => {
+      if (!gameRunning) return;
+      // 左移：不超出左边界
+      if (keys['a'] && player.offsetLeft > 0) {
+        player.style.left = `${player.offsetLeft - gameConfig.playerSpeed}px`;
+      }
+      // 右移：不超出右边界
+      if (keys['d'] && player.offsetLeft < gameBox.offsetWidth - 100) {
+        player.style.left = `${player.offsetLeft + gameConfig.playerSpeed}px`;
+      }
+      // 只有未跳跃时，才检查站位（站障碍物/落地面），杜绝跳跃中判定冲突
+      if (!isJumping) checkOnObstacle();
+    }, 16);
+
+    // 检查站位：站障碍物/落地面（仅非跳跃时执行，无冲突）
+  function checkOnObstacle() {
+  const pRect = player.getBoundingClientRect();
+  const obstacles = document.querySelectorAll('.obstacle');
+  let targetTop = gameBoxHeight - 40 - player.offsetHeight; // 默认地面
+
+  obstacles.forEach(obs => {
+    const oRect = obs.getBoundingClientRect();
+    // 宽松判定：只要水平重叠+垂直接近，就识别为站在障碍物上
+    const isOverObstacle = pRect.left < oRect.right && pRect.right > oRect.left;
+    const isOnTop = pRect.bottom >= oRect.top - 20 && pRect.bottom <= oRect.top + 15;
+    if (isOverObstacle && isOnTop) {
+      targetTop = oRect.top - player.offsetHeight;
+    }
+  });
+  player.style.top = `${targetTop}px`;
+}
+
+    // 核心修复：跳跃逻辑（统一top定位+单锁防卡跳+小步长防闪烁）
+    function jump() {
+      isJumping = true; // 上锁：跳跃中禁止再次触发
+      const startTop = player.offsetTop; // 起跳点top（地面/障碍物顶）
+      const targetTop = startTop - gameConfig.jumpHeight; // 跳跃最高点top
+
+      // 向上跳：小步长，丝滑不闪烁
+      const jumpUp = setInterval(() => {
+        const currentTop = player.offsetTop;
+        // 到达最高点，开始下落
+        if (currentTop <= targetTop) {
+          clearInterval(jumpUp);
+          // 下落：小步长，精准落地
+          const jumpDown = setInterval(() => {
+            const newTop = player.offsetTop + gameConfig.jumpStep;
+            // 落回起跳点，解锁并结束跳跃
+            if (newTop >= startTop) {
+              clearInterval(jumpDown);
+              player.style.top = `${startTop}px`; // 精准归位，无误差
+              isJumping = false; // 解锁：允许再次跳跃
+              checkOnObstacle(); // 落地后检查站位a
+            } 
+            else {
+              player.style.top = `${newTop}px`;
+            }
+          }, 16);
+        } else {
+          player.style.top = `${currentTop - gameConfig.jumpStep}px`;
+        }
+      }, 16);
+    }
+
+    // 射击逻辑（鼠标点击/手机射按钮，共用）
+    gameBox.addEventListener('click', () => {
+      if (!gameRunning) return;
+      createBullet();
+    });
+
+    // 创建子弹并向右飞行
+    function createBullet() {
+      const bullet = document.createElement('div');
+      bullet.className = 'bullet';
+      gameBox.appendChild(bullet);
+      // 子弹初始位置：玩家右侧中间
+      const bulletLeft = player.offsetLeft + player.offsetWidth;
+      const bulletTop = player.offsetTop + player.offsetHeight / 2 - bullet.offsetHeight / 2;
+      bullet.style.left = `${bulletLeft}px`;
+      bullet.style.top = `${bulletTop}px`;
+
+      // 子弹向右移动
+      const bulletMove = setInterval(() => {
+        const currentLeft = bullet.offsetLeft;
+        // 飞出右边界，移除子弹
+        if (currentLeft > gameBox.offsetWidth) {
+          clearInterval(bulletMove);
+          gameBox.removeChild(bullet);
+        } else {
+          bullet.style.left = `${currentLeft + gameConfig.bulletSpeed}px`;
+          checkHit(bullet, bulletMove); // 检测是否击中怪物
+        }
+      }, 12);
+    }
+
+    // 生成怪物：右侧随机高度出现，向左移动
+    function createMonster() {
+      if (!gameRunning) return;
+      const monster = document.createElement('div');
+      monster.className = 'monster';
+      gameBox.appendChild(monster);
+      // 随机高度：地面/略高（可跳躲，避免和障碍物重叠）
+      const randomBottom = Math.random() > 0.6 ? 40 : 70;
+      monster.style.bottom = `${randomBottom}px`;
+      monster.style.right = '-60px'; // 强制初始在右侧外
+
+      // 怪物向左移动
+      const monsterMove = setInterval(() => {
+        const currentRight = parseInt(monster.style.right) || 0;
+        // 飞出左边界，移除怪物
+        if (currentRight > gameBox.offsetWidth) {
+          clearInterval(monsterMove);
+          gameBox.removeChild(monster);
+        } else {
+          monster.style.right = `${currentRight + gameConfig.monsterSpeed}px`;
+          checkPlayerHit(monster, monsterMove); // 检测是否碰到玩家
+        }
+      }, 20);
+    }
+
+    // 碰撞检测：子弹击中怪物（加分+加速刷新+播放音效）
+    function checkHit(bullet, bulletMove) {
+      const monsters = document.querySelectorAll('.monster');
+      monsters.forEach(monster => {
+        const bRect = bullet.getBoundingClientRect();
+        const mRect = monster.getBoundingClientRect();
+        // 边界重叠=击中
+        if (
+          bRect.left < mRect.right &&
+          bRect.right > mRect.left &&
+          bRect.top < mRect.bottom &&
+          bRect.bottom > mRect.top
+        ) {
+          clearInterval(bulletMove);
+          gameBox.removeChild(bullet);
+          gameBox.removeChild(monster);
+          // 加分并更新显示
+          score++;
+          scoreSpan.innerText = score;
+
+          // 分数越高，怪物刷新越快（核心逻辑）
+          clearInterval(monsterTimer);
+          const newTime = Math.max(
+            gameConfig.baseMonsterTime - score * gameConfig.scoreSpeedStep,
+            gameConfig.minMonsterTime
+          );
+          monsterTimer = setInterval(createMonster, newTime);
+
+          // 播放打怪音效（克隆避免卡顿，捕获浏览器拦截）
+          const soundClone = hitSound.cloneNode(true);
+          soundClone.play().catch(() => {});
+        }
+      });
+    }
+
+    // 碰撞检测：怪物碰到玩家=游戏结束
+    function checkPlayerHit(monster, monsterMove) {
+      const pRect = player.getBoundingClientRect();
+      const mRect = monster.getBoundingClientRect();
+      if (
+        pRect.left < mRect.right &&
+        pRect.right > mRect.left &&
+        pRect.top < mRect.bottom &&
+        pRect.bottom > mRect.top
+      ) {
+        clearInterval(monsterMove);
+        gameOverFun();
+      }
+    }
+
+    // 游戏结束逻辑
+    function gameOverFun() {
+      gameRunning = false;
+      gameOver.style.display = 'block';
+      // 清除所有怪物、子弹和定时器
+      document.querySelectorAll('.monster').forEach(m => m.remove());
+      document.querySelectorAll('.bullet').forEach(b => b.remove());
+      if (monsterTimer) clearInterval(monsterTimer);
+    }
+
+    // 重启游戏逻辑（恢复初始状态，重新生成障碍物/怪物）
+    function restartGame() {
+      score = 0;
+      gameRunning = true;
+      isJumping = false;
+      scoreSpan.innerText = score;
+      gameOver.style.display = 'none';
+      // 重置玩家位置：统一top定位，无冲突
+      player.style.left = '80px';
+      player.style.top = `${gameBoxHeight - 40 - player.offsetHeight}px`;
+      player.style.bottom = 'auto';
+
+      // 清除旧障碍物，重新初始化游戏
+      document.querySelectorAll('.obstacle').forEach(o => o.remove());
+      if (monsterTimer) clearInterval(monsterTimer);
+      initGame();
+    }
+  </script>
+  <div style="
+     position: fixed;
+     bottom: 5px;
+     left: 0;
+     right: 0;
+     text-align: center;
+     color: #fff;
+     font-size: 12px;
+     text-shadow: 1px 1px 2px #000;
+     z-index: 1000;
+   ">
+     本代码由徐（岁安辞）原创开发，仅供娱乐，无其他用途
+   </div>
+</body>
+</html>
