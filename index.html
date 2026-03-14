@@ -114,7 +114,7 @@
     }
     .mobile-left, .mobile-right {
       display: flex;
-      gap: 15px;
+      gap: 20px;
       pointer-events: auto;
     }
     .mobile-btn {
@@ -142,20 +142,12 @@
         font-size: 20px;
       }
     }
-    @media screen and (orientation:portrait) {
-      html {
-        transform: rotate(90deg);
-        transform-origin: top left;
-        width: 100vh;
-        height: 100vw;
-        position: absolute;
-        top: 100%;
-        left: 0;
-      }
-    }
   </style>
 </head>
 <body>
+  <div style="position:fixed;top:10px;left:0;right:0;text-align:center;color:#fff;font-size:16px;text-shadow:2px 2px #000;z-index:999;">
+  📱 建议横屏游玩，体验更佳
+</div>
   <div id="game-box">
     <div id="tip">电脑：WASD移动 | 空格跳跃 | 鼠标射击 | R重开<br>手机：左右键移动 | 跳/射按钮操作</div>
     <div id="score-box">得分：<span id="score">0</span></div>
